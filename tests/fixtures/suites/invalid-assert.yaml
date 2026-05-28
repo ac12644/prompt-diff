@@ -1,0 +1,7 @@
+model: gpt-4o
+tests:
+  - id: bad
+    input: "hi"
+    assert:
+      - type: not_a_real_assertion
+        value: "x"

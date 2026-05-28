@@ -1,0 +1,14 @@
+src/
+tests/
+node_modules/
+.promptdiff-cache/
+.github/
+.gitignore
+.npmignore
+tsconfig.json
+vitest.config.ts
+*.log
+.env
+.env.local
+coverage/
+CLAUDE.md

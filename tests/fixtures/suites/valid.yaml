@@ -1,0 +1,23 @@
+model: gpt-4o
+judge_model: gpt-4o-mini
+runs_per_test: 2
+concurrency: 3
+
+tests:
+  - id: basic_summary
+    input: "Summarize this: {{text}}"
+    vars:
+      text: "The water cycle describes how water evaporates."
+    assert:
+      - type: length_under
+        value: 200
+      - type: llm_judge
+        criteria: "Is factually accurate and concise"
+
+  - id: tone_check
+    input: "Reply to this angry customer."
+    assert:
+      - type: not_contains
+        value: "unfortunately"
+      - type: contains
+        value: "thank you"

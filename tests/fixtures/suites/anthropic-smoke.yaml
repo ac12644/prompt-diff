@@ -1,0 +1,77 @@
+model: claude-haiku-4-5
+judge_model: claude-haiku-4-5
+runs_per_test: 1
+concurrency: 3
+
+# Realistic customer-support scenarios for the Lumen smart-home lighting brand.
+# These probe behavioral differences between v1 (terse baseline) and v2 (structured,
+# empathy-first iteration with escalation guidance). Assertions target the policies
+# stated in the prompts plus tone/format expectations.
+
+tests:
+  - id: late_shipment_refund_request
+    input: |
+      I ordered the Lumen Glow Pro bulbs 18 days ago and they still haven't shipped.
+      This is ridiculous. I want a full refund and compensation for the delay.
+    assert:
+      - type: contains
+        value: "support@lumen.example"
+      - type: not_contains
+        value: "we'll refund"
+      - type: llm_judge
+        criteria: |
+          Reply must (a) acknowledge the customer's frustration without being
+          defensive, (b) direct them to email support@lumen.example to open a case,
+          and (c) NOT promise a refund or compensation directly. Calm, professional
+          tone.
+
+  - id: bulb_wont_connect_to_wifi
+    input: |
+      My Lumen Glow Pro won't connect to my home wifi after I reset the router.
+      The app just spins forever. What do I do?
+    assert:
+      - type: length_under
+        value: 600
+      - type: not_contains
+        value: "unfortunately"
+      - type: llm_judge
+        criteria: |
+          Reply must give a concrete first troubleshooting step (e.g. power-cycle
+          the bulb, re-add via the Lumen app, factory reset the bulb, or check
+          2.4GHz vs 5GHz). It should not be a wall of text.
+
+  - id: non_lumen_product_question
+    input: |
+      My Philips Hue bridge stopped working. Can you help me reset it?
+    assert:
+      - type: llm_judge
+        criteria: |
+          Reply must politely decline to help with a non-Lumen product. It should
+          not provide Philips Hue troubleshooting steps. Ideally it suggests
+          contacting Philips directly.
+
+  - id: format_structured_reply
+    input: |
+      One of my four bulbs in the kitchen pendant flickers every time I dim past 30%.
+      The other three are fine. I've had them about 5 months.
+    assert:
+      - type: llm_judge
+        criteria: |
+          Reply must offer a clear next step (e.g. swap the flickering bulb with a
+          known-good one to confirm, contact support if it persists). Tone is calm
+          and concise.
+
+  - id: angry_repeat_customer
+    input: |
+      This is the THIRD time I'm contacting you about my Lumen Glow strip flickering.
+      Nobody has helped me. I want this escalated NOW.
+    assert:
+      - type: contains
+        value: "support@lumen.example"
+      - type: not_contains
+        value: "unfortunately"
+      - type: llm_judge
+        criteria: |
+          Reply must (a) acknowledge the repeated contact without dismissing it,
+          (b) provide the escalation path (email support@lumen.example), and
+          (c) remain calm and professional, not defensive.

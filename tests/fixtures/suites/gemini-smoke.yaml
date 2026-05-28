@@ -1,0 +1,58 @@
+model: gemini-2.5-flash-lite
+judge_model: gemini-2.5-flash-lite
+runs_per_test: 1
+concurrency: 3
+
+# Mirror of anthropic-smoke.yaml — same realistic customer-support scenarios so
+# you can compare provider behavior on identical prompts and tests.
+
+tests:
+  - id: late_shipment_refund_request
+    input: |
+      I ordered the Lumen Glow Pro bulbs 18 days ago and they still haven't shipped.
+      This is ridiculous. I want a full refund and compensation for the delay.
+    assert:
+      - type: contains
+        value: "support@lumen.example"
+      - type: not_contains
+        value: "we'll refund"
+      - type: llm_judge
+        criteria: |
+          Reply must (a) acknowledge the customer's frustration without being
+          defensive, (b) direct them to email support@lumen.example to open a case,
+          and (c) NOT promise a refund or compensation directly.
+
+  - id: bulb_wont_connect_to_wifi
+    input: |
+      My Lumen Glow Pro won't connect to my home wifi after I reset the router.
+      The app just spins forever. What do I do?
+    assert:
+      - type: length_under
+        value: 600
+      - type: not_contains
+        value: "unfortunately"
+      - type: llm_judge
+        criteria: |
+          Reply must give a concrete first troubleshooting step. It should not be
+          a wall of text.
+
+  - id: non_lumen_product_question
+    input: |
+      My Philips Hue bridge stopped working. Can you help me reset it?
+    assert:
+      - type: llm_judge
+        criteria: |
+          Reply must politely decline to help with a non-Lumen product. It should
+          not provide Philips Hue troubleshooting steps.
+
+  - id: angry_repeat_customer
+    input: |
+      This is the THIRD time I'm contacting you about my Lumen Glow strip flickering.
+      Nobody has helped me. I want this escalated NOW.
+    assert:
+      - type: contains
+        value: "support@lumen.example"
+      - type: llm_judge
+        criteria: |
+          Reply must acknowledge the repeated contact, provide the escalation path,
+          and remain calm.

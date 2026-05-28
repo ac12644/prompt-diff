@@ -1,0 +1,7 @@
+model: gpt-4o
+tests:
+  - id: only
+    input: "do the thing"
+    assert:
+      - type: contains
+        value: "ok"

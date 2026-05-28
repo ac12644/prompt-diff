@@ -1,0 +1,25 @@
+model: gpt-4o
+judge_model: gpt-4o-mini
+runs_per_test: 1
+concurrency: 5
+
+tests:
+  - id: greeting
+    input: "Say hello"
+    assert:
+      - type: contains
+        value: "hello"
+
+  - id: thanks
+    input: "Reply to: I waited 2 weeks!"
+    assert:
+      - type: contains
+        value: "thank"
+      - type: not_contains
+        value: "unfortunately"
+
+  - id: judged
+    input: "Explain rain"
+    assert:
+      - type: llm_judge
+        criteria: "Output is factually accurate and concise"
