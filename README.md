@@ -1,14 +1,22 @@
 # promptdiff
 
-Compare two prompt versions **behaviorally**, not as text. Runs both against a YAML test
-suite, scores outputs with deterministic assertions + LLM-as-judge, and reports a single
-regression score, per-test verdicts, and a cost delta.
+**The regression-test gate for AI-generated prompts.** Any optimizer (Anthropic's Prompt
+Improver, OpenAI's Playground, DSPy, an in-house tool, or Claude itself) can suggest
+a new prompt. promptdiff is what you run before you ship it — to prove the new prompt
+holds the behaviors you actually care about, and at what cost.
+
+Two modes:
 
 ```bash
-promptdiff v1.txt v2.txt --suite tests.yaml
+# Compare two prompt versions against a YAML test suite
+promptdiff diff v1.txt v2.txt --suite tests.yaml
+
+# Or: hand it your prompt + suite, get a verified-better candidate back
+promptdiff suggest prompt.txt --suite tests.yaml --output improved.txt
 ```
 
-It does one thing well. It is not a prompt manager, not a red-teaming tool, not a dashboard.
+It does one thing well: **decide whether the new prompt is shippable.** Not a prompt
+manager, not a red-teaming tool, not a dashboard.
 
 ---
 
@@ -16,7 +24,8 @@ It does one thing well. It is not a prompt manager, not a red-teaming tool, not 
 
 - [Try it on the bundled example](#try-it-on-the-bundled-example)
 - [Install](#install)
-- [Use it on your own prompts](#use-it-on-your-own-prompts)
+- [`promptdiff suggest` — auto-improve a prompt](#promptdiff-suggest--auto-improve-a-prompt)
+- [`promptdiff diff` — compare two prompts](#promptdiff-diff--compare-two-prompts)
 - [CLI reference](#cli-reference)
 - [Test suite format](#test-suite-format)
 - [Supported providers](#supported-providers)
@@ -30,9 +39,42 @@ It does one thing well. It is not a prompt manager, not a red-teaming tool, not 
 
 ## Try it on the bundled example
 
-The repo ships with a realistic smoke fixture — a customer-support prompt iteration for a
-fictional smart-home brand ("Lumen"). Five real customer messages, run against both v1
-(terse baseline) and v2 (empathy-first structured rewrite), judged by `claude-haiku-4-5`:
+### `suggest`: rewrite a weak prompt and prove the rewrite is better
+
+Real output from running against a deliberately weak baseline (a generic "be helpful"
+prompt) and asking `claude-sonnet-4-5` to fix it:
+
+```
+promptdiff suggest: tests/fixtures/prompts/v0-weak.txt
+────────────────────────────────────────────────────────────
+  Rewriter:          claude-sonnet-4-5
+  Verdict:           ACCEPT — suggestion improves baseline
+  Score vs baseline: 96 / 100
+  Cost (avg/call):   $0.00198 → $0.00076  (-61.7%)
+
+  Baseline weaknesses targeted by the rewriter:
+    ✗ late_shipment_refund_request
+        must contain "support@lumen.example"
+    ✗ bulb_wont_connect_to_wifi
+        output length must be under 600 characters
+    ✗ angry_repeat_customer
+        must contain "support@lumen.example"
+
+  Per-test outcome (suggestion vs baseline):
+    ✓ late_shipment_refund_request      98
+    ✓ bulb_wont_connect_to_wifi         97
+    ✓ non_lumen_product_question        95
+    ✓ format_structured_reply           95
+    ✓ angry_repeat_customer             93
+```
+
+**Every deterministic failure fixed. Every test passes. Cost down 61.7% per call.** The
+suggested prompt is saved to the path you pass with `--output`. Exit code is 0 if the
+rewrite beats the threshold, 1 if it doesn't (so CI can gate on it).
+
+### `diff`: prove a hand-written v2 holds the behaviors of v1
+
+Same fixture, comparing the bundled terse v1 against the empathy-first v2:
 
 ```
 promptdiff: tests/fixtures/prompts/v1.txt → tests/fixtures/prompts/v2.txt
@@ -45,25 +87,32 @@ promptdiff: tests/fixtures/prompts/v1.txt → tests/fixtures/prompts/v2.txt
   Text diff:         +12 / -5 lines, tokens Δ 68 (+79.1%)
 ────────────────────────────────────────────────────────────
 
-  ✓ late_shipment_refund_request    98
-  ✓ bulb_wont_connect_to_wifi       98
-  ✓ non_lumen_product_question      95
-  ✓ format_structured_reply         95
-  ✓ angry_repeat_customer           98
+  ✓ late_shipment_refund_request      98
+  ✓ bulb_wont_connect_to_wifi         98
+  ✓ non_lumen_product_question        95
+  ✓ format_structured_reply           95
+  ✓ angry_repeat_customer             98
 ```
 
-The signal: v2 holds every policy v1 held (refund escalation, non-Lumen decline,
-no-promises) and scores 95–98 on every judge criterion — but the longer system prompt
-costs **+19.5% per call**. That's the trade-off you couldn't see without this tool.
+v2 holds every policy v1 held (refund escalation, non-Lumen decline) and scores 95–98 on
+every judge criterion — but the longer prompt costs **+19.5% per call**. That's the
+trade-off you couldn't see without this tool.
 
-Reproduce it:
+Reproduce both:
 
 ```bash
 git clone https://github.com/ac12644/prompt-diff.git
 cd prompt-diff
 cp .env.example .env       # then paste your ANTHROPIC_API_KEY into .env
 npm install && npm run build
-node bin/promptdiff.js \
+
+# Demo 1 — auto-improve the weak baseline
+node bin/promptdiff.js suggest tests/fixtures/prompts/v0-weak.txt \
+  -s tests/fixtures/suites/anthropic-smoke.yaml \
+  --suggester claude-sonnet-4-5 --output /tmp/improved.txt --no-cache
+
+# Demo 2 — diff two existing prompts
+node bin/promptdiff.js diff \
   tests/fixtures/prompts/v1.txt tests/fixtures/prompts/v2.txt \
   -s tests/fixtures/suites/anthropic-smoke.yaml --no-cache
 ```
@@ -98,7 +147,41 @@ override `.env` values, so you can override per-run.
 
 ---
 
-## Use it on your own prompts
+## `promptdiff suggest` — auto-improve a prompt
+
+The hero command. Give it one prompt + a suite. It runs the suite against your prompt,
+asks a strong LLM (default `claude-opus-4-7`) to rewrite it focused on the failures, runs
+the suite against the rewrite, and judges baseline-vs-suggestion using the same pipeline
+as `diff`. You get back a **verified** rewrite, not a raw LLM suggestion.
+
+```bash
+promptdiff suggest prompts/v1.txt \
+  --suite tests/suite.yaml \
+  --suggester claude-sonnet-4-5 \
+  --output prompts/v1-improved.txt \
+  --min-improvement 90
+```
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--suggester <model>` | `claude-opus-4-7` (or first available) | Strong model used to rewrite the prompt. |
+| `-o, --output <path>` | *(stdout only)* | Where to save the accepted suggestion. |
+| `--min-improvement <n>` | `90` | Reject the rewrite if the diff score is below this. |
+| `--no-cache` | off | Bypass cache. |
+| `--format <type>` | `terminal` | `terminal` or `json` for piping. |
+
+**Exit code is 0** if the rewrite is accepted (score ≥ `--min-improvement` and not failed),
+**1** if rejected. So you can do:
+
+```bash
+promptdiff suggest p.txt -s tests.yaml -o p.improved.txt && mv p.improved.txt p.txt
+```
+
+— and your prompt only gets overwritten if the rewrite actually beat the suite.
+
+---
+
+## `promptdiff diff` — compare two prompts
 
 Create `v1.txt` (current prompt) and `v2.txt` (candidate). Real example — a customer
 support iteration:
@@ -157,18 +240,34 @@ Gate CI on `--min-score 80` and you'll catch the moment a tweak silently breaks 
 ## CLI reference
 
 ```
-promptdiff <v1> <v2> [options]
+promptdiff diff <v1> <v2> --suite <path> [options]
+promptdiff suggest <prompt> --suite <path> [options]
+```
 
-Arguments:
-  v1                  Path to first prompt file
-  v2                  Path to second prompt file
+### `diff` options
 
-Options:
+```
   -s, --suite <path>  Path to test suite YAML  (required)
   -m, --model <name>  Override model from suite
   --min-score <n>     Exit 1 if regression score is below this (0–100)
   --no-cache          Skip the response cache; always call the provider
   --format <type>     Output format: terminal | json   (default: terminal)
+```
+
+### `suggest` options
+
+```
+  -s, --suite <path>           Path to test suite YAML  (required)
+  --suggester <model>          Rewriter model (default: claude-opus-4-7)
+  -o, --output <path>          Save the suggested prompt to this file
+  --min-improvement <n>        Reject if diff score is below this (default: 90)
+  --no-cache                   Skip the response cache
+  --format <type>              terminal | json (default: terminal)
+```
+
+### Global
+
+```
   -V, --version       Print version
   -h, --help          Print help
 ```

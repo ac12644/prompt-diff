@@ -117,3 +117,34 @@ export type OrchestrateOptions = {
 
 /** Discriminated Result for core functions that signal expected failure. */
 export type Result<T, E> = { ok: true; value: T } | { ok: false; error: E }
+
+/** Per-test summary of what the baseline got wrong, used to prompt the rewriter. */
+export type WeaknessSummary = {
+  testId: string
+  input: string
+  output: string
+  failedAssertions: string[]   // human-readable, e.g. 'contains "thanks"'
+}
+
+/** End-to-end output of `promptdiff suggest`. */
+export type SuggestionReport = {
+  originalPrompt: string
+  suggestedPrompt: string
+  suggesterModel: string
+  weaknesses: WeaknessSummary[]
+  baselineResults: RunResult[]
+  suggestionResults: RunResult[]
+  diff: DiffReport             // suggestion (as v2) judged against original (as v1)
+  accepted: boolean            // diff.verdict === 'pass' and score ≥ minImprovement
+}
+
+/** Options for orchestrateSuggest(). */
+export type SuggestOptions = {
+  apiKeys?: ProviderKeys
+  suggesterModel?: string      // override the rewriter model (default: claude-opus-4-7)
+  outputPath?: string          // where to write the suggested prompt (default: stdout-only)
+  minImprovement?: number      // accept only if diff score ≥ this (default: 90 — same as 'pass')
+  noCache?: boolean
+  cacheDir?: string
+  format?: 'terminal' | 'json'
+}
