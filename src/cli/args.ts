@@ -29,7 +29,7 @@ export function buildProgram(onAction: (parsed: ParsedCli) => void): Command {
   const program = new Command()
     .name('promptdiff')
     .description('Behavioral regression testing for LLM prompts.')
-    .version('0.1.0')
+    .version('0.2.0')
 
   // Default subcommand: diff (preserves the original `promptdiff v1 v2 -s suite.yaml` UX).
   program

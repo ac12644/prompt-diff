@@ -1,7 +1,7 @@
 {
   "name": "promptdiff",
-  "version": "0.1.0",
-  "description": "Compare two prompt versions behaviorally — runs both against a test suite, scores outputs, and reports regressions, cost delta, and a single score.",
+  "version": "0.2.0",
+  "description": "The regression-test gate for AI-generated prompts. Auto-improve prompts and verify the rewrite against a YAML test suite, or diff any two prompts. Supports OpenAI, Anthropic, Google Gemini.",
   "type": "module",
   "bin": {
     "promptdiff": "./bin/promptdiff.js"
@@ -34,6 +34,9 @@
     "diff",
     "evaluation",
     "regression",
+    "prompt-engineering",
+    "prompt-testing",
+    "prompt-optimization",
     "openai",
     "anthropic",
     "gemini",
